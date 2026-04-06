@@ -1,18 +1,11 @@
 """
 Legal Intelligence Engine — Main Pipeline
 ==========================================
-Orchestrates all phases in sequence.
+Orchestrates all phases: segmentation → ranking → summarization → BNS mapping → financials.
 
 Usage:
   from main import run_pipeline
-
-  with open("judgment.txt") as f:
-      text = f.read()
-
   result = run_pipeline(text)
-  print(result["summary"])
-  print(result["financials"])
-  print(result["statute_changes"])
 """
 
 from pipeline.segmenter import segment_legal_doc
@@ -26,15 +19,8 @@ def run_pipeline(raw_text: str) -> dict:
     """
     Full pipeline: raw judgment text → structured intelligence output.
 
-    Returns:
-    {
-      "summary":          str,       # clean abstractive summary
-      "mapped_summary":   str,       # summary with BNS annotations
-      "statute_changes":  list,      # IPC → BNS mappings detected
-      "financials":       dict,      # structured financial data
-      "segmentation_mode": str,      # "structured" or "fallback"
-      "top_chunks":       list,      # (text, score, section) tuples
-    }
+    Returns dict with keys: summary, mapped_summary, statute_changes,
+    financials, segmentation_mode, top_chunks.
     """
     print("\n[Pipeline] Step 1/5 -- Segmenting document...")
     doc = segment_legal_doc(raw_text)
@@ -49,17 +35,14 @@ def run_pipeline(raw_text: str) -> dict:
 
     print("[Pipeline] Step 4/5 -- Mapping IPC -> BNS statutes...")
     mapped_summary, statute_changes = map_statutes(summary)
-    # Also map the original text so the UI can highlight changes
     _, full_text_changes = map_statutes(raw_text)
-    all_changes = {
-        d["ipc_section"]: d for d in (statute_changes + full_text_changes)
-    }.values()
+    # Deduplicate by IPC section
+    all_changes = {d["ipc_section"]: d for d in statute_changes + full_text_changes}.values()
 
     print("[Pipeline] Step 5/5 -- Extracting financial data...")
     financials = extract_financials(raw_text)
 
     print("[Pipeline] Done.\n")
-
     return {
         "summary": summary,
         "mapped_summary": mapped_summary,
@@ -70,49 +53,17 @@ def run_pipeline(raw_text: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Quick smoke test — run with: python main.py
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    SAMPLE = """
-    IN THE SUPREME COURT OF INDIA
-    Civil Appeal No. 1234 of 2024
+    from test_cases import SHORT_TEXT
 
-    FACTS OF THE CASE:
-    The appellant was charged under Section 302 IPC for the alleged murder
-    of the deceased on 15th March 2023. The Sessions Court convicted the
-    appellant and sentenced him to life imprisonment along with a fine of
-    Rs. 50,000.
-
-    ARGUMENTS:
-    Learned counsel for the appellant submitted that the prosecution had
-    failed to prove beyond reasonable doubt that the appellant committed the
-    offence. The learned counsel for the respondent contended that the
-    evidence on record was sufficient to sustain the conviction.
-
-    JUDGMENT:
-    We have heard learned counsel for both sides and perused the records.
-    The prosecution has established the guilt of the accused beyond reasonable
-    doubt. The circumstantial evidence clearly points to the appellant.
-
-    ORDERED:
-    In view of the foregoing, the appeal is dismissed. The conviction under
-    Section 302 IPC is upheld. The accused shall pay compensation of
-    Rs. 1,00,000 to the family of the deceased.
-    """
-
-    result = run_pipeline(SAMPLE)
-
+    result = run_pipeline(SHORT_TEXT)
     print("=" * 60)
-    print("SUMMARY:")
-    print(result["summary"])
-    print("\nMAPPED SUMMARY (IPC -> BNS):")
-    print(result["mapped_summary"])
+    print("SUMMARY:", result["summary"])
+    print("\nMAPPED SUMMARY (IPC -> BNS):", result["mapped_summary"])
     print("\nSTATUTE CHANGES:")
     for s in result["statute_changes"]:
         print(f"  {s['ipc_section']} -> {s['bns_section']} ({s['description']})")
     print("\nFINANCIALS:")
-    f = result["financials"]
-    print(f"  Fines: {f['fine']}")
-    print(f"  Compensation: {f['compensation']}")
+    print(f"  Fines: {result['financials']['fine']}")
+    print(f"  Compensation: {result['financials']['compensation']}")
     print(f"\nSegmentation mode: {result['segmentation_mode']}")
