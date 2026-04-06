@@ -21,7 +21,7 @@ _AMOUNT_PATTERN = re.compile(
 )
 
 _CATEGORY_CONTEXT = {
-    "fine": re.compile(r"(?i)(fine|fined|imposed|penalty|default)\b"),
+    "fine": re.compile(r"(?i)(fine|fined|imposed|penalty|default|amounting)\b"),
     "compensation": re.compile(r"(?i)(compensation|compensate|damages|solatium|ex\s*-?\s*gratia)\b"),
     "penalty": re.compile(r"(?i)(penalt(y|ies)|penalised|penalized|surcharge)\b"),
     "costs": re.compile(r"(?i)(costs?|court\s+fee|litigation\s+cost)\b"),
@@ -62,12 +62,12 @@ def _get_cross_encoder():
     return _CROSS_ENCODER
 
 def _is_semantic_match(category: str, context: str) -> bool:
-    """Uses BERT to distinguish between 'Section 420' and 'Fine under Section 420'."""
-    query = f"Is this specifically a court-ordered {category}, fine, or monetary penalty payment?"
+    """Uses BERT with ultra-sensitivity to capture all significant legal values."""
+    query = f"Is this a significant monetary amount, {category}, or legal value relevant to the case judgment?"
     model = _get_cross_encoder()
     score = model.predict([query, context])
-    # Low threshold (0.05) allows BERT to 'Rescue' items the bouncer was suspicious of
-    return score > 0.05
+    # Ultra-low threshold for high recall on case-central amounts
+    return score > 0.01
 
 # ---------------------------------------------------------------------------
 # Classification & Extraction
