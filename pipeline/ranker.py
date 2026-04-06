@@ -21,7 +21,7 @@ from typing import List, Tuple
 # Constants
 # ---------------------------------------------------------------------------
 CHUNK_SIZE = 512        # words per chunk (not tokens — avoids tokenizer dep)
-TOP_K = 5               # number of chunks returned to summarizer
+TOP_K = 8               # number of chunks returned to summarizer
 
 RETRIEVAL_QUERY = (
     "final judgment, legal decision, court ruling, ordered, dismissed, held"

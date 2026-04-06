@@ -21,9 +21,9 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from typing import List, Tuple
 
-MAX_INPUT_TOKENS = 1024     # safe limit for both models on CPU
-MAX_SUMMARY_TOKENS = 256
-MIN_SUMMARY_TOKENS = 80
+MAX_INPUT_TOKENS = 2048     # expanded for complex cases
+MAX_SUMMARY_TOKENS = 512    # allow multi-paragraph output
+MIN_SUMMARY_TOKENS = 120    # prevent overly vague summaries
 
 # Model registry
 _MODELS = {
@@ -151,7 +151,7 @@ def summarize_raw(text: str) -> str:
             min_length=adaptive_min,
             do_sample=False,
             num_beams=2,
-            length_penalty=2.0,
+            length_penalty=1.5,
             early_stopping=True,
         )
 

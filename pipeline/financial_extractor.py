@@ -133,12 +133,18 @@ def extract_financials(text: str) -> Dict:
         seen_amounts.add(amount_str)
 
         category = _classify_amount(text, match.start(), match.end())
-        result[category].append(amount_str)
-
-        # Capture ~60 chars of context around the match for UI display
-        ctx_start = max(0, match.start() - 40)
-        ctx_end = min(len(text), match.end() + 40)
-        context_snippet = "..." + text[ctx_start:ctx_end].strip() + "..."
+        
+        # Capture ~80 chars of context around the match for UI display
+        ctx_start = max(0, match.start() - 50)
+        ctx_end = min(len(text), match.end() + 50)
+        context_snippet = text[ctx_start:ctx_end].strip()
+        
+        detail = {
+            "amount": amount_str,
+            "context": f"...{context_snippet}..."
+        }
+        
+        result[category].append(detail)
 
         result["raw_mentions"].append({
             "amount": amount_str,
