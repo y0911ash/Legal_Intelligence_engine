@@ -110,14 +110,31 @@ def _get_cross_encoder():
         _CROSS_ENCODER = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
     return _CROSS_ENCODER
 
+def _is_forbidden_context(text: str) -> bool:
+    """Checks if context is a non-fine (like a section), but allows payment keyword overrides."""
+    lower_text = text.lower()
+    words = lower_text.split()
+    
+    # Check for 'Fine' or 'Penalty' in the same context - these OVERRIDE forbidden prefixes
+    if any(keyword in lower_text for keyword in ["fine", "penalty", "compensation", "costs", "sum of"]):
+        return False
+
+    # Standard bouncer for case IDs and sections
+    for word in words[-4:]:
+        clean_word = re.sub(r'[^a-z0-9.]', '', word)
+        if clean_word in _FORBIDDEN_PREFIXES:
+            return True
+    return False
+
+# ...
+
 def _is_semantic_match(category: str, context: str) -> bool:
-    """Uses BERT to verify if context actually implies a legal penalty payment."""
-    # Use a highly specific 'Expert query' for the legal domain
-    query = f"Is this amount specifically a court-ordered {category} or monetary penalty? Ignore case numbers."
+    """Uses BERT to verify if context implies a legal penalty payment."""
+    query = f"The court ordered a {category} or financial payment of an amount."
     model = _get_cross_encoder()
     score = model.predict([query, context])
-    # High threshold (0.5) to ensure high-confidence matches only
-    return score > 0.5
+    # Lowered threshold (0.1) for better recall on high-value fines
+    return score > 0.1
 
 
 def _classify_amount(full_text: str, match_start: int, match_end: int) -> str:
