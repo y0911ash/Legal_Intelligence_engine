@@ -14,7 +14,7 @@ from typing import Dict, List
 # Patterns & Windows
 # ---------------------------------------------------------------------------
 _AMOUNT_PATTERN = re.compile(
-    r"(?:₹|Rs\.?\s*)(\d{1,2}(?:,\d{2})*,\d{3}|\d+)"
+    r"(?:₹|Rs\.?|INR|Rupees)\s*(\d{1,2}(?:,\d{2})*,\d{3}|\d+)"
     r"(?:\s*/?\-?)?"
     r"(?:\s*(?:lakhs?|crores?|thousands?))?",
     re.IGNORECASE
