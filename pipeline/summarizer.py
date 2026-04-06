@@ -108,13 +108,16 @@ def summarize(ranked_chunks: List[Tuple[str, float, str]]) -> str:
     return summarize_raw(input_text)
 
 
+MAX_INPUT_TOKENS = 2048     # expanded for complex cases
+MAX_SUMMARY_TOKENS = 512    # allow multi-paragraph output
+MIN_SUMMARY_TOKENS = 120    # prevent overly vague summaries
+
+# ...
+
 def summarize_raw(text: str) -> str:
     """
-    Summarize raw text directly -- same model, same params as summarize().
-    Used by evaluator for fair baseline comparison.
-
-    Both summarize() and summarize_raw() use this EXACT same generation
-    path, ensuring any comparison between them is scientifically fair.
+    Summarize raw text directly. 
+    Refined with a 'Structured Brief' template to force deep analysis.
     """
     if not text.strip():
         return "Summarization failed: input text was empty."
@@ -122,10 +125,17 @@ def summarize_raw(text: str) -> str:
     tokenizer, model = _load_model()
     device = next(model.parameters()).device
 
-    input_text = text
-    # For flan-t5 models, prepend the task instruction
-    if "flan" in (_MODEL_NAME or ""):
-        input_text = "summarize: " + input_text
+    # Structured Instruction for Legal Synthesis
+    brief_template = (
+        "Instructions: Synthesize the following court judgment into a professional Legal Brief. "
+        "Use exactly three sections formatted as follows:\n"
+        "📂 CASE FACTS: [Short summary of who is involved and what happened]\n"
+        "⚖️ LEGAL ISSUES & ARGUMENTS: [The specific laws or rights involved]\n"
+        "🏛️ FINAL VERDICT: [The court's decision and reasoning]\n\n"
+        "Case Text: "
+    )
+    
+    input_text = brief_template + text
 
     inputs = tokenizer(
         input_text,

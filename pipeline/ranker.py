@@ -105,43 +105,53 @@ def score_chunk(
 
 def rank_chunks(
     doc: SegmentedDocument,
-    query: str = RETRIEVAL_QUERY,
-    top_k: int = TOP_K
+    query: str = RETRIEVAL_QUERY
 ) -> List[Tuple[str, float, str]]:
     """
-    Returns top_k chunks as list of (chunk_text, score, section_name).
-
-    Handles edge case: if a section is empty, it is skipped without error.
+    Returns a Balanced Selection of chunks to provide Case Diversity.
+    Picks at least 2 facts, 2 arguments, and 3-4 judgment/order chunks.
+    This ensures the 'Beginning/Middle/End' of 108 pages aren't missed.
     """
     model = _get_model()
-    all_chunks: List[str] = []
-    metadata: List[str] = []           # section name per chunk
+    
+    # Track segments by their section
+    sectional_scored: Dict[str, List[Tuple[float, str]]] = {
+        "facts": [], "arguments": [], "judgment": [], "final_order": []
+    }
 
-    for section_name, text in doc.sections.items():
-        if not text.strip():
-            continue
-        for chunk in chunk_text(text):
-            all_chunks.append(chunk)
-            metadata.append(section_name)
-
-    if not all_chunks:
-        return []
-
-    # Encode everything
+    # First, chunk and score everything
     query_emb = model.encode(query, convert_to_tensor=True)
-    chunk_embs = model.encode(all_chunks, convert_to_tensor=True)
-    similarities = util.cos_sim(query_emb, chunk_embs)[0].cpu().numpy()
+    
+    for section_name, text in doc.sections.items():
+        if not text.strip(): continue
+        
+        chunks = chunk_text(text)
+        if not chunks: continue
+        
+        chunk_embs = model.encode(chunks, convert_to_tensor=True)
+        similarities = util.cos_sim(query_emb, chunk_embs)[0].cpu().numpy()
+        
+        # Determine the logical section category (merge judgment/final_order weights if needed)
+        cat = "judgment" if section_name in ["judgment", "final_order"] else section_name
+        if cat not in sectional_scored: cat = "judgment" # fallback
 
-    scored: List[Tuple[float, int]] = []
-    for i, chunk in enumerate(all_chunks):
-        s = score_chunk(
-            semantic_sim=float(similarities[i]),
-            kw_density=keyword_density(chunk),
-            section_name=metadata[i]
-        )
-        scored.append((s, i))
+        for i, chunk in enumerate(chunks):
+            s = score_chunk(
+                semantic_sim=float(similarities[i]),
+                kw_density=keyword_density(chunk),
+                section_name=section_name
+            )
+            sectional_scored[cat].append((s, chunk, section_name))
 
-    scored.sort(key=lambda x: x[0], reverse=True)
-    top = scored[:top_k]
+    # Balanced Collection:
+    # 2 Facts, 2 Args, 4 Judgment
+    final_selection = []
+    
+    for cat, items in sectional_scored.items():
+        items.sort(key=lambda x: x[0], reverse=True)
+        # Dynamic pull based on section importance
+        limit = 4 if cat == "judgment" else 2
+        for score, chunk, orig_sec in items[:limit]:
+            final_selection.append((chunk, score, orig_sec))
 
-    return [(all_chunks[i], s, metadata[i]) for s, i in top]
+    return final_selection

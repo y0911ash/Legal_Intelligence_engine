@@ -172,7 +172,8 @@ if raw_text:
                 status.update(label=f"Analysis Complete in {total_t:.2f}s!", state="complete", expanded=False)
             
             # --- Results Presentation ---
-            st.markdown(f'<div class="summary-card"><h4>AI Abstractive Summary</h4>{result["mapped_summary"]}</div>', unsafe_allow_html=True)
+            st.markdown("### ✨ Case Analysis Brief")
+            st.markdown(f'<div class="summary-card" style="min-height: 400px; white-space: pre-wrap;">{result["mapped_summary"]}</div>', unsafe_allow_html=True)
             
             # Financials & BNS
             st.divider()
