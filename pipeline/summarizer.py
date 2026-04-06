@@ -99,48 +99,56 @@ def _prepare_input(ranked_chunks: List[Tuple[str, float, str]]) -> str:
 
 def summarize(ranked_chunks: List[Tuple[str, float, str]]) -> str:
     """
-    Main entry: takes output from ranker, returns summary string.
+    Focused Multi-Pass Summarizer.
+    Summarizes Facts, Arguments, and Verdict separately to avoid model looping.
     """
     if not ranked_chunks:
         return "Summarization failed: no chunks provided."
 
-    input_text = _prepare_input(ranked_chunks)
-    return summarize_raw(input_text)
+    # Group the balanced chunks by their section
+    facts_text = " ".join(c for c, _, s in ranked_chunks if s == "facts")
+    args_text  = " ".join(c for c, _, s in ranked_chunks if s == "arguments")
+    # Judgment + Final Order are high priority
+    verdict_text = " ".join(c for c, _, s in ranked_chunks if s in ["judgment", "final_order"])
+    
+    brief_parts = []
+    
+    if facts_text:
+        brief_parts.append("### 📂 CASE FACTS")
+        brief_parts.append(summarize_raw(facts_text, "Summary of current case facts"))
+    
+    if args_text:
+        brief_parts.append("### ⚖️ LEGAL ISSUES & ARGUMENTS")
+        brief_parts.append(summarize_raw(args_text, "Main legal contentions and issues"))
+        
+    if verdict_text:
+        brief_parts.append("### 🏛️ FINAL VERDICT")
+        brief_parts.append(summarize_raw(verdict_text, "The final court decision and reasoning"))
+
+    # If everything failed, fallback to global summary
+    if not brief_parts:
+        input_text = " ".join(c for c, _, _ in ranked_chunks)
+        return summarize_raw(input_text, "General Case Summary")
+
+    return "\n\n".join(brief_parts)
 
 
-MAX_INPUT_TOKENS = 2048     # expanded for complex cases
-MAX_SUMMARY_TOKENS = 512    # allow multi-paragraph output
-MIN_SUMMARY_TOKENS = 120    # prevent overly vague summaries
-
-# ...
-
-def summarize_raw(text: str) -> str:
+def summarize_raw(text: str, instruction: str = "summarize") -> str:
     """
-    Summarize raw text directly. 
-    Refined with a 'Structured Brief' template to force deep analysis.
+    Summarize raw text directly with a focused single instruction.
     """
-    if not text.strip():
-        return "Summarization failed: input text was empty."
+    if not text.strip(): return ""
 
     tokenizer, model = _load_model()
-    device = next(model.parameters()).device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Structured Instruction for Legal Synthesis
-    brief_template = (
-        "Instructions: Synthesize the following court judgment into a professional Legal Brief. "
-        "Use exactly three sections formatted as follows:\n"
-        "📂 CASE FACTS: [Short summary of who is involved and what happened]\n"
-        "⚖️ LEGAL ISSUES & ARGUMENTS: [The specific laws or rights involved]\n"
-        "🏛️ FINAL VERDICT: [The court's decision and reasoning]\n\n"
-        "Case Text: "
-    )
-    
-    input_text = brief_template + text
+    # Simple, focused instruction prevents looping in small LLMs
+    input_text = f"{instruction}: " + text
 
     inputs = tokenizer(
         input_text,
         return_tensors="pt",
-        max_length=MAX_INPUT_TOKENS,
+        max_length=1024, # Smaller, safer window for single-pass
         truncation=True
     ).to(device)
 
