@@ -1,0 +1,13 @@
+# Legal Intelligence Engine — Dependencies
+# Install: pip install -r requirements.txt
+
+# Core ML
+transformers>=4.38.0
+torch>=2.1.0
+sentence-transformers>=2.6.0
+
+# Evaluation
+rouge-score>=0.1.2
+
+# Utilities
+numpy>=1.24.0
