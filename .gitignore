@@ -35,10 +35,12 @@ ENV/
 env.bak/
 venv.bak/
 
+
 # Project specific
 ildc_batch_results.csv
 rouge_results.md
 output.txt
+ANTIGRAVITY_BRIEF.md
 
 # OS generated files
 .DS_Store
