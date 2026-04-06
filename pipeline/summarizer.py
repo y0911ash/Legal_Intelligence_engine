@@ -99,33 +99,61 @@ def _prepare_input(ranked_chunks: List[Tuple[str, float, str]]) -> str:
 
 def summarize(ranked_chunks: List[Tuple[str, float, str]]) -> str:
     """
-    Main entry: takes output from ranker, returns summary string.
+    Section-by-Section Multi-Pass Summarizer
+    -----------------------------------------
+    Generates a full-page structured legal brief.
+    Runs 3 separate LLM passes to provide deep detail.
     """
     if not ranked_chunks:
         return "Summarization failed: no chunks provided."
 
-    input_text = _prepare_input(ranked_chunks)
-    return summarize_raw(input_text)
+    # Group chunks by section
+    facts_text = " ".join(c for c, _, s in ranked_chunks if s == "facts")
+    args_text  = " ".join(c for c, _, s in ranked_chunks if s == "arguments")
+    # Judgment + Final Order are high priority
+    verdict_text = " ".join(c for c, _, s in ranked_chunks if s in ["judgment", "final_order"])
+    
+    # Fallback if specific sections weren't found: just use the ranker's order
+    if not any([facts_text, args_text, verdict_text]):
+        input_text = " ".join(c for c, _, _ in ranked_chunks)
+        return summarize_raw(input_text, "Full Legal Brief")
+
+    brief_parts = []
+    
+    if facts_text:
+        brief_parts.append("### 📜 FACTUAL BACKGROUND")
+        brief_parts.append(summarize_raw(facts_text, "Case Facts"))
+    
+    if args_text:
+        brief_parts.append("### ⚖️ LEGAL ARGUMENTS")
+        brief_parts.append(summarize_raw(args_text, "Court Arguments"))
+        
+    if verdict_text:
+        brief_parts.append("### 🏛️ JUDICIAL REASONING & VERDICT")
+        brief_parts.append(summarize_raw(verdict_text, "Rulings"))
+
+    return "\n\n".join(brief_parts)
 
 
-def summarize_raw(text: str) -> str:
+def summarize_raw(text: str, context_label: str = "Summary") -> str:
     """
-    Summarize raw text directly -- same model, same params as summarize().
-    Used by evaluator for fair baseline comparison.
-
-    Both summarize() and summarize_raw() use this EXACT same generation
-    path, ensuring any comparison between them is scientifically fair.
+    Summarize raw text directly. 
+    Refined with 'context_label' to harden the prompt and focus the model 
+    exclusively on legal outcome rather than document noise.
     """
     if not text.strip():
-        return "Summarization failed: input text was empty."
+        return f"{context_label} skipped: input text was empty."
 
     tokenizer, model = _load_model()
     device = next(model.parameters()).device
 
     input_text = text
-    # For flan-t5 models, prepend the task instruction
+    # Refined legal-focused instruction for FLAN models
     if "flan" in (_MODEL_NAME or ""):
-        input_text = "summarize: " + input_text
+        input_text = f"Summarize the {context_label} of this court document in detail. Ignore all document metadata and noise: " + input_text
+    else: 
+        # BART needs the context in the beginning
+        input_text = f"LEGAL ANALYSIS ({context_label}): " + input_text
 
     inputs = tokenizer(
         input_text,

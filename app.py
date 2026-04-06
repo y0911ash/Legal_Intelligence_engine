@@ -110,6 +110,22 @@ with st.sidebar:
     4. **Abstractive Generator** (GPU)
     """)
 
+import re
+
+def clean_legal_text(text: str) -> str:
+    """Wipes out PDF noise (watermarks, page numbers, website URLs)."""
+    # Remove common legal database watermarks
+    text = re.sub(r"(?i)www\.manupatra\.com|manupatra", "", text)
+    # Remove Page X of Y / Page X
+    text = re.sub(r"(?i)page\s+\d+(\s+of\s+\d+)?", "", text)
+    # Remove common footer date patterns e.g. 06-03-2026
+    text = re.sub(r"\d{2}-\d{2}-\d{4}", "", text)
+    # Remove repetitive case ID headers in footers
+    text = re.sub(r"(?i)\[\d{4}\]\s+INSC\s+\d+", "", text)
+    # Clean up excessive whitespace
+    text = re.sub(r"\n\s*\n", "\n\n", text)
+    return text.strip()
+
 # Helper to read files
 def read_input_file(file):
     if file.name.endswith(".pdf"):
@@ -118,7 +134,7 @@ def read_input_file(file):
         text = ""
         for page in reader.pages:
             text += page.extract_text() + "\n"
-        return text
+        return clean_legal_text(text)
     else:
         return str(file.read(), "utf-8")
 
@@ -160,7 +176,8 @@ if raw_text:
                 status.update(label=f"Analysis Complete in {total_t:.2f}s!", state="complete", expanded=False)
             
             # --- Results Presentation ---
-            st.markdown(f'<div class="summary-card"><h4>AI Abstractive Summary</h4>{result["mapped_summary"]}</div>', unsafe_allow_html=True)
+            st.markdown("### ✨ Intelligent Deep-Analysis Brief")
+            st.markdown(f'<div class="summary-card" style="min-height: 500px;">{result["mapped_summary"]}</div>', unsafe_allow_html=True)
             
             # Financials & BNS
             st.divider()
