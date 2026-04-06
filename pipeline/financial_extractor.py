@@ -79,34 +79,6 @@ def _trim_at_boundary(text: str, direction: str) -> str:
         return text
 
 
-# ---------------------------------------------------------------------------
-# Semantic BERT scoring for 'True Fine' detection
-# ---------------------------------------------------------------------------
-_CROSS_ENCODER = None
-
-def _get_cross_encoder():
-    global _CROSS_ENCODER
-    if _CROSS_ENCODER is None:
-        from sentence_transformers import CrossEncoder
-        _CROSS_ENCODER = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-    return _CROSS_ENCODER
-
-def _is_semantic_match(category: str, context: str) -> bool:
-    """Uses BERT to verify if context actually implies the category."""
-    model = _get_cross_encoder()
-    # High-signal legal queries
-    queries = {
-        "fine": "monetary penalty imposed by court for criminal offence",
-        "compensation": "money awarded to victim for damages or loss",
-        "penalty": "administrative or legal financial punishment",
-        "costs": "court fees or litigation expenses awarded"
-    }
-    query = queries.get(category, "legal fine")
-    score = model.predict([query, context])
-    # Threshold 0.0 is usually balanced for ms-marco cross-encoders
-    return score > 0.0
-
-
 def _classify_amount(full_text: str, match_start: int, match_end: int) -> str:
     """
     Return category using the closest keyword match in either direction,
@@ -161,22 +133,12 @@ def extract_financials(text: str) -> Dict:
         seen_amounts.add(amount_str)
 
         category = _classify_amount(text, match.start(), match.end())
-        
-        # Capture ~80 chars of context around the match for UI display
-        ctx_start = max(0, match.start() - 50)
-        ctx_end = min(len(text), match.end() + 50)
-        context_snippet = text[ctx_start:ctx_end].strip()
-        
-        # --- BERT Semantic Refinement ---
-        if not _is_semantic_match(category, context_snippet):
-            continue    # ignore if not semantically verified as a fine/penalty/etc
-        
-        detail = {
-            "amount": amount_str,
-            "context": f"...{context_snippet}..."
-        }
-        
-        result[category].append(detail)
+        result[category].append(amount_str)
+
+        # Capture ~60 chars of context around the match for UI display
+        ctx_start = max(0, match.start() - 40)
+        ctx_end = min(len(text), match.end() + 40)
+        context_snippet = "..." + text[ctx_start:ctx_end].strip() + "..."
 
         result["raw_mentions"].append({
             "amount": amount_str,

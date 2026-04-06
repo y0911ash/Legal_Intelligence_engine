@@ -118,10 +118,6 @@ def clean_legal_text(text: str) -> str:
     text = re.sub(r"(?i)www\.manupatra\.com|manupatra", "", text)
     # Remove Page X of Y / Page X
     text = re.sub(r"(?i)page\s+\d+(\s+of\s+\d+)?", "", text)
-    # Remove common footer date patterns e.g. 06-03-2026
-    text = re.sub(r"\d{2}-\d{2}-\d{4}", "", text)
-    # Remove repetitive case ID headers in footers
-    text = re.sub(r"(?i)\[\d{4}\]\s+INSC\s+\d+", "", text)
     # Clean up excessive whitespace
     text = re.sub(r"\n\s*\n", "\n\n", text)
     return text.strip()
@@ -176,8 +172,7 @@ if raw_text:
                 status.update(label=f"Analysis Complete in {total_t:.2f}s!", state="complete", expanded=False)
             
             # --- Results Presentation ---
-            st.markdown("### ✨ Intelligent Deep-Analysis Brief")
-            st.markdown(f'<div class="summary-card" style="min-height: 500px;">{result["mapped_summary"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="summary-card"><h4>AI Abstractive Summary</h4>{result["mapped_summary"]}</div>', unsafe_allow_html=True)
             
             # Financials & BNS
             st.divider()
@@ -202,10 +197,8 @@ if raw_text:
                     for k,v in fin.items():
                         if k == "raw_mentions": continue
                         if v: 
-                            for entry in v:
-                                amt = entry["amount"]
-                                ctx = entry["context"].replace("\n", " ")
-                                f_list.append({"Type": k.capitalize(), "Amount": amt, "Context (Reason)": ctx})
+                            value_str = ", ".join(v) if isinstance(v, list) else str(v)
+                            f_list.append({"Type": k.capitalize(), "Amount": value_str})
                     st.dataframe(pd.DataFrame(f_list), use_container_width=True, hide_index=True)
                 else:
                     st.info("No financial penalties detected.")
