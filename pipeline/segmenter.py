@@ -2,41 +2,30 @@
 Phase 1: Legal Document Segmenter
 ----------------------------------
 Parses Indian court judgments into structured sections.
-
-KEY FIX over naive version:
-- Fallback mode: if no headers are detected (common in older judgments),
-  the entire text is treated as a single 'judgment' block so the pipeline
-  never fails silently.
-- Confidence flag tells downstream modules how reliable the segmentation is.
+Falls back to treating the entire text as 'judgment' if no headers are detected.
 """
 
 import re
 from dataclasses import dataclass, field
 from typing import Dict
 
-
-# ---------------------------------------------------------------------------
 # Section header patterns — ordered from weakest to strongest signal
-# ---------------------------------------------------------------------------
 SECTION_PATTERNS = {
     "facts": [
         r"(?i)\b(facts\s+of\s+the\s+(case|matter)|brief\s+facts|background(\s+facts)?|"
         r"factual\s+(background|matrix)|brief\s+background|stated\s+facts)\b",
-        # Standalone headers: "FACTS:", "FACTS OF CASE:"
         r"(?i)^\s*facts\s*:?\s*$",
     ],
     "arguments": [
         r"(?i)\b(contentions?|submissions?|arguments?\s+(made|raised|advanced)|"
         r"learned\s+(counsel|advocate)(\s+for\s+\w+)?\s+(submitted?|argued?|contended?)|"
         r"on\s+behalf\s+of\s+(the\s+)?(appellant|respondent|petitioner))\b",
-        # Standalone headers: "ARGUMENTS:", "SUBMISSIONS:", "CONTENTIONS:"
         r"(?i)^\s*(arguments?|submissions?|contentions?)\s*:?\s*$",
     ],
     "judgment": [
         r"(?i)\b(reasoning|analysis|point[s]?\s+for\s+determination|"
         r"consideration|discussion|our\s+view|we\s+find|we\s+are\s+of\s+the\s+opinion|"
         r"upon\s+perusal|having\s+heard|after\s+hearing)\b",
-        # Standalone headers: "JUDGMENT:", "ANALYSIS:", "REASONING:"
         r"(?i)^\s*(judgment|analysis|reasoning|discussion|consideration)\s*:?\s*$",
     ],
     "final_order": [
@@ -45,7 +34,6 @@ SECTION_PATTERNS = {
         r"it\s+is\s+(hereby\s+)?(ordered|directed|decreed)|"
         r"(the\s+)?appeal\s+is\s+(allowed|dismissed|disposed|partly\s+allowed)|"
         r"(the\s+)?petition\s+is\s+(allowed|dismissed|disposed))\b",
-        # Standalone headers: "ORDER:", "ORDERED:", "CONCLUSION:", "RESULT:"
         r"(?i)^\s*(order|ordered|conclusion|result|dispositif|operative\s+order)\s*:?\s*$",
     ],
 }
@@ -54,7 +42,7 @@ SECTION_PATTERNS = {
 @dataclass
 class SegmentedDocument:
     sections: Dict[str, str] = field(default_factory=dict)
-    segmented: bool = True          # False = fallback mode was used
+    segmented: bool = True
     detected_headers: list = field(default_factory=list)
 
     def summary(self) -> str:
@@ -63,58 +51,38 @@ class SegmentedDocument:
         return f"Segmentation mode: {mode} | Section word counts: {lengths}"
 
 
-def _compile_patterns():
-    compiled = {}
-    for section, patterns in SECTION_PATTERNS.items():
-        # Keep as list — joining (?i) inline flags causes re.error when mixed with flags arg
-        compiled[section] = [
-            re.compile(p, re.MULTILINE) for p in patterns
-        ]
-    return compiled
+# Pre-compile all patterns at module load
+_COMPILED = {
+    section: [re.compile(p, re.MULTILINE) for p in patterns]
+    for section, patterns in SECTION_PATTERNS.items()
+}
 
 
-def _match_section(line: str, compiled_map: dict):
+def _match_section(line: str) -> str | None:
     """Return section name if any pattern matches, else None."""
-    for section, pattern_list in compiled_map.items():
-        for pattern in pattern_list:
-            if pattern.search(line):
-                return section
+    for section, pattern_list in _COMPILED.items():
+        if any(p.search(line) for p in pattern_list):
+            return section
     return None
 
 
-_COMPILED = _compile_patterns()
-
-
-def _split_into_units(text: str):
-    """
-    Split text into processable units.
-    Strategy: try newline-based split first; if most lines are long
-    (single-line PDFs, concatenated text), fall back to sentence splitting.
-    """
+def _split_into_units(text: str) -> list[str]:
+    """Split text into processable units (lines or sentences for single-line PDFs)."""
     lines = text.split("\n")
-    non_empty_lines = [l for l in lines if l.strip()]
-
-    # If we get fewer than 3 non-empty lines, try sentence splitting
-    if len(non_empty_lines) < 3:
-        # Split on sentence boundaries that look like section transitions
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        return sentences
-
+    non_empty = [l for l in lines if l.strip()]
+    if len(non_empty) < 3:
+        return re.split(r'(?<=[.!?])\s+', text)
     return lines
 
 
 def segment_legal_doc(text: str) -> SegmentedDocument:
     """
     Main entry point. Accepts raw judgment text, returns a SegmentedDocument.
-
-    Strategy:
-      1. Split text into lines (or sentences if line-split gives <3 units).
-      2. Scan each unit for section header signals.
-      3. If fewer than 2 distinct sections detected → activate fallback.
-      4. Fallback: dump entire text into 'judgment' bucket so pipeline continues.
+    If fewer than 2 distinct sections detected, falls back to dumping all text
+    into the 'judgment' bucket.
     """
     units = _split_into_units(text)
-    sections: Dict[str, list] = {"facts": [], "arguments": [], "judgment": [], "final_order": []}
+    sections: Dict[str, list] = {k: [] for k in SECTION_PATTERNS}
     current_section = "facts"
     detected_headers = []
 
@@ -124,37 +92,23 @@ def segment_legal_doc(text: str) -> SegmentedDocument:
             sections[current_section].append(unit)
             continue
 
-        matched_section = _match_section(stripped, _COMPILED)
-
-        if matched_section and matched_section != current_section:
-            current_section = matched_section
-            if matched_section not in detected_headers:
-                detected_headers.append(matched_section)
+        matched = _match_section(stripped)
+        if matched and matched != current_section:
+            current_section = matched
+            if matched not in detected_headers:
+                detected_headers.append(matched)
 
         sections[current_section].append(unit)
 
-    # Collapse lists to strings
     result = {k: " ".join(v).strip() for k, v in sections.items()}
 
-    # ----- FALLBACK CHECK -----
-    # If only one section has content (everything landed in 'facts' because
-    # no headers were found), activate fallback.
+    # Fallback: if only one section has content, treat entire text as judgment
     non_empty = [k for k, v in result.items() if v.split()]
     if len(non_empty) <= 1:
-        fallback_sections = {
-            "facts": "",
-            "arguments": "",
-            "judgment": text.strip(),   # entire text goes here
-            "final_order": ""
-        }
         return SegmentedDocument(
-            sections=fallback_sections,
+            sections={k: (text.strip() if k == "judgment" else "") for k in SECTION_PATTERNS},
             segmented=False,
-            detected_headers=[]
+            detected_headers=[],
         )
 
-    return SegmentedDocument(
-        sections=result,
-        segmented=True,
-        detected_headers=detected_headers
-    )
+    return SegmentedDocument(sections=result, segmented=True, detected_headers=detected_headers)
