@@ -158,9 +158,8 @@ def summarize_raw(text: str, instruction: str = "summarize") -> str:
     if input_token_count == 0:
         return "Summarization failed: input text was empty after truncation."
 
-    # Adaptive min_length: at most 1/3 of input tokens, capped at MIN_SUMMARY_TOKENS
-    # Prevents degenerate output when input is short
-    adaptive_min = min(MIN_SUMMARY_TOKENS, max(10, input_token_count // 3))
+    # Adaptive min_length: capped at 40 to avoid forcing low-quality filler
+    adaptive_min = min(40, max(10, input_token_count // 4))
 
     with torch.no_grad():
         output_ids = model.generate(
@@ -168,8 +167,10 @@ def summarize_raw(text: str, instruction: str = "summarize") -> str:
             max_length=MAX_SUMMARY_TOKENS,
             min_length=adaptive_min,
             do_sample=False,
-            num_beams=2,
-            length_penalty=2.0,
+            num_beams=4,
+            repetition_penalty=2.5,
+            length_penalty=1.0,
+            no_repeat_ngram_size=3,
             early_stopping=True,
         )
 

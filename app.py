@@ -113,11 +113,24 @@ with st.sidebar:
 import re
 
 def clean_legal_text(text: str) -> str:
-    """Wipes out PDF noise (watermarks, page numbers, website URLs)."""
-    # Remove common legal database watermarks
-    text = re.sub(r"(?i)www\.manupatra\.com|manupatra", "", text)
-    # Remove Page X of Y / Page X
-    text = re.sub(r"(?i)page\s+\d+(\s+of\s+\d+)?", "", text)
+    """Aggressively wipes out repetitive PDF noise and headers."""
+    lines = text.split("\n")
+    from collections import Counter
+    line_counts = Counter(line.strip() for line in lines if line.strip())
+    
+    # Identify lines that appear on almost every page (Headers/Footers)
+    global_noise = {line for line, count in line_counts.items() if count > 3}
+    
+    cleaned_lines = []
+    for line in lines:
+        stripped = line.strip()
+        # Drop frequent noise, watermarks, and page numbers
+        if stripped in global_noise: continue
+        if re.search(r"(?i)www\.manupatra\.com|manupatra", stripped): continue
+        if re.search(r"(?i)page\s+\d+(\s+of\s+\d+)?", stripped): continue
+        cleaned_lines.append(line)
+        
+    text = "\n".join(cleaned_lines)
     # Clean up excessive whitespace
     text = re.sub(r"\n\s*\n", "\n\n", text)
     return text.strip()
