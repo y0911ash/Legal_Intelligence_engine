@@ -171,6 +171,7 @@ if raw_text:
                 if any(v for k,v in fin.items()):
                     f_list = []
                     for k,v in fin.items():
+                        if k == "raw_mentions": continue
                         if v: 
                             value_str = ", ".join(v) if isinstance(v, list) else str(v)
                             f_list.append({"Type": k.capitalize(), "Amount": value_str})
