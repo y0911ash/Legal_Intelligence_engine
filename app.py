@@ -171,7 +171,9 @@ if raw_text:
                 if any(v for k,v in fin.items()):
                     f_list = []
                     for k,v in fin.items():
-                        if v: f_list.append({"Type": k.capitalize(), "Amount": v})
+                        if v: 
+                            value_str = ", ".join(v) if isinstance(v, list) else str(v)
+                            f_list.append({"Type": k.capitalize(), "Amount": value_str})
                     st.dataframe(pd.DataFrame(f_list), use_container_width=True, hide_index=True)
                 else:
                     st.info("No financial penalties detected.")
