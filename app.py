@@ -204,18 +204,28 @@ if raw_text:
                     st.info("No outdated IPC codes detected.")
                     
             with mc2:
-                st.markdown("#### Monetary Extraction")
+                st.markdown("#### ✅ Verified Penalties")
                 fin = result.get("financials", {})
-                if any(v for k,v in fin.items()):
-                    f_list = []
-                    for k,v in fin.items():
-                        if k == "raw_mentions": continue
-                        if v: 
-                            value_str = ", ".join(v) if isinstance(v, list) else str(v)
-                            f_list.append({"Type": k.capitalize(), "Amount": value_str})
+                f_list = []
+                for cat in ["fine", "compensation", "penalty", "costs"]:
+                    for item in fin.get(cat, []):
+                        f_list.append({
+                            "Type": cat.capitalize(),
+                            "Amount": item["amount"],
+                            "Reason": item["context"]
+                        })
+                
+                if f_list:
                     st.dataframe(pd.DataFrame(f_list), use_container_width=True, hide_index=True)
                 else:
-                    st.info("No financial penalties detected.")
+                    st.info("No verified penalties detected.")
+                    
+                with st.expander("🔍 View All Monetary Mentions (including unverified)"):
+                    raw = fin.get("raw_mentions", [])
+                    if raw:
+                        st.table(pd.DataFrame(raw))
+                    else:
+                        st.write("No mentions found.")
                     
 else:
     st.info("👈 Please select a case from the sidebar to begin processing.")

@@ -79,14 +79,58 @@ def _trim_at_boundary(text: str, direction: str) -> str:
         return text
 
 
+# ---------------------------------------------------------------------------
+# "Legal Guardrail" Heuristic Blacklist
+# ---------------------------------------------------------------------------
+_FORBIDDEN_PREFIXES = {
+    "section", "article", "case", "petition", "no.", "no", "writ", "act",
+    "dated", "year", "dated:", "paragraph", "para", "clause"
+}
+
+def _is_forbidden_context(text: str) -> bool:
+    """Checks if the context around an amount indicates it's a non-fine (like a section)."""
+    words = text.lower().split()
+    # Check the last 3 words before the amount for forbidden prefixes
+    for word in words[-3:]:
+        clean_word = re.sub(r'[^a-z0-9.]', '', word)
+        if clean_word in _FORBIDDEN_PREFIXES:
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Semantic BERT scoring for 'True Fine' detection
+# ---------------------------------------------------------------------------
+_CROSS_ENCODER = None
+
+def _get_cross_encoder():
+    global _CROSS_ENCODER
+    if _CROSS_ENCODER is None:
+        from sentence_transformers import CrossEncoder
+        _CROSS_ENCODER = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    return _CROSS_ENCODER
+
+def _is_semantic_match(category: str, context: str) -> bool:
+    """Uses BERT to verify if context actually implies a legal penalty payment."""
+    # Use a highly specific 'Expert query' for the legal domain
+    query = f"Is this amount specifically a court-ordered {category} or monetary penalty? Ignore case numbers."
+    model = _get_cross_encoder()
+    score = model.predict([query, context])
+    # High threshold (0.5) to ensure high-confidence matches only
+    return score > 0.5
+
+
 def _classify_amount(full_text: str, match_start: int, match_end: int) -> str:
     """
-    Return category using the closest keyword match in either direction,
-    confined to the current sentence (stops at sentence boundaries).
+    Return category using keywords and a heuristic bouncer.
     """
     raw_back = full_text[max(0, match_start - CONTEXT_WINDOW_BACK):match_start]
-    raw_fwd  = full_text[match_end:match_end + CONTEXT_WINDOW_FWRD]
+    
+    # 🚨 GUARDRAIL 1: HEURISTIC BOUNCER
+    if _is_forbidden_context(raw_back):
+        return "non_legal_mention"
 
+    raw_fwd  = full_text[match_end:match_end + CONTEXT_WINDOW_FWRD]
     back_context = _trim_at_boundary(raw_back, 'back')
     fwd_context  = _trim_at_boundary(raw_fwd,  'forward')
 
@@ -128,17 +172,29 @@ def extract_financials(text: str) -> Dict:
 
     for match in _AMOUNT_PATTERN.finditer(text):
         amount_str = _format_amount(match)
-        if amount_str in seen_amounts:
-            continue
+        if amount_str in seen_amounts: continue
         seen_amounts.add(amount_str)
 
         category = _classify_amount(text, match.start(), match.end())
-        result[category].append(amount_str)
 
-        # Capture ~60 chars of context around the match for UI display
-        ctx_start = max(0, match.start() - 40)
-        ctx_end = min(len(text), match.end() + 40)
-        context_snippet = "..." + text[ctx_start:ctx_end].strip() + "..."
+        # Capture ~80 chars of context for scoring and UI
+        ctx_start = max(0, match.start() - 60)
+        ctx_end = min(len(text), match.end() + 60)
+        context_snippet = text[ctx_start:ctx_end].strip()
+
+        # 🚨 GUARDRAIL 2: SEMANTIC VERIFIER (BERT)
+        if category != "non_legal_mention":
+            if not _is_semantic_match(category, context_snippet):
+                category = "non_legal_mention"
+
+        detail = {
+            "amount": amount_str,
+            "context": f"...{context_snippet}..."
+        }
+
+        # Only add to verified buckets if it passed the bouncers
+        if category in ["fine", "compensation", "penalty", "costs"]:
+            result[category].append(detail)
 
         result["raw_mentions"].append({
             "amount": amount_str,
