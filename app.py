@@ -99,7 +99,7 @@ with st.sidebar:
     st.markdown("Use a pre-loaded case or upload a raw unstructured judgment text.")
     
     choice = st.selectbox("Pre-loaded Cases", list(SAMPLES.keys()))
-    uploaded_file = st.file_uploader("Upload .txt judgment", type=["txt"])
+    uploaded_file = st.file_uploader("Upload Judgment (.txt or .pdf)", type=["txt", "pdf"])
     
     st.divider()
     st.markdown("### ⚙️ Pipeline Components")
@@ -110,10 +110,22 @@ with st.sidebar:
     4. **Abstractive Generator** (GPU)
     """)
 
+# Helper to read files
+def read_input_file(file):
+    if file.name.endswith(".pdf"):
+        from pypdf import PdfReader
+        reader = PdfReader(file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+        return text
+    else:
+        return str(file.read(), "utf-8")
+
 # Determine the working text
 raw_text = ""
 if uploaded_file is not None:
-    raw_text = str(uploaded_file.read(), "utf-8")
+    raw_text = read_input_file(uploaded_file)
 elif choice != "Select a Case...":
     raw_text = SAMPLES[choice]
 
