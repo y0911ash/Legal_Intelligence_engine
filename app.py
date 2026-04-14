@@ -174,10 +174,10 @@ st.markdown(
     <section class="modern-hero">
         <div class="hero-copy">
             <span class="eyebrow">Legal Intelligence Engine</span>
-            <h1>Turn dense Indian judgments into clean, outcome-aware briefings.</h1>
+            <h1>Transform raw rulings into strategic intelligence</h1>
             <p>
-                Load a judgment, run the retrieval-guided pipeline, and review the
-                summary, statute updates, and financial implications in one place.
+                Load a judgment, run the automated analysis, and review the intelligence dashboard. 
+                Our engine automatically flags actionable components and penal clauses.
             </p>
         </div>
         <div class="hero-actions">
@@ -205,7 +205,7 @@ with st.container():
         f"""
         <div class="section-heading">
             <div>
-                <span class="section-kicker">Pipeline progress</span>
+                <span class="section-kicker">Review stages</span>
                 <h2>Guided case workflow</h2>
             </div>
             <div class="progress-note">Current stage: Step {st.session_state.step} of 3</div>
@@ -216,9 +216,9 @@ with st.container():
     st.progress(progress_value / 100)
     progress_cols = st.columns(3)
     progress_labels = [
-        ("01", "Document intake", st.session_state.step >= 1),
-        ("02", "Pipeline analysis", st.session_state.step >= 2),
-        ("03", "Review and export", st.session_state.step >= 3),
+        ("01", "Upload document", st.session_state.step >= 1),
+        ("02", "Document analysis", st.session_state.step >= 2),
+        ("03", "Review findings", st.session_state.step >= 3),
     ]
     for column, (number, label, active) in zip(progress_cols, progress_labels):
         tone = "progress-chip active" if active else "progress-chip"
@@ -275,9 +275,10 @@ with st.container():
         st.markdown(
             """
             - A focused executive summary built from ranked legal sections
-            - IPC to BNS statute mapping where legacy references are detected
-            - Financial implications such as fines, compensation, penalties, and costs
-            - A technical trace showing how the pipeline prioritized the judgment
+            - A multi-pass abstractive summary of **Facts**, **Arguments**, and the **Verdict**
+            - Extraction of structured **fines & penalties**
+            - Statutory migration from **IPC → BNS**
+            - A technical trace showing how the AI model prioritized the judgment text
             """
         )
 
@@ -334,9 +335,8 @@ if st.session_state.step >= 2:
             <div class="section-heading">
                 <div>
                     <span class="section-kicker">Step 02</span>
-                    <h2>Run the legal intelligence pipeline</h2>
+                    <h2>Process judgment document</h2>
                 </div>
-                <div class="progress-note">Review the source metrics, then generate the analysis report.</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -360,7 +360,6 @@ if st.session_state.step >= 2:
 
         with run_col:
             st.markdown("##### Analysis controls")
-            st.caption("The backend pipeline remains unchanged. This step only runs the existing engine.")
             if st.button("Analyze Judgement", type="primary", use_container_width=True):
                 progress_bar = st.progress(0.0)
                 with st.status("Analyzing judgment...", expanded=True) as status:
