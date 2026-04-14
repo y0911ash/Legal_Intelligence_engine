@@ -28,15 +28,24 @@ _CONTEXT_BACK = 120
 _CONTEXT_FWD = 60
 _SENTENCE_END = re.compile(r'[.!?]')
 
-# BERT Cross-Encoder (lazy-loaded)
+# Cross-Encoder (lazy-loaded). If unavailable, we fall back to heuristics.
 _CROSS_ENCODER = None
+_CROSS_ENCODER_FAILED = False
 
 
 def _get_cross_encoder():
-    global _CROSS_ENCODER
+    global _CROSS_ENCODER, _CROSS_ENCODER_FAILED
+    if _CROSS_ENCODER_FAILED:
+        return None
     if _CROSS_ENCODER is None:
-        from sentence_transformers import CrossEncoder
-        _CROSS_ENCODER = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+        try:
+            from sentence_transformers import CrossEncoder
+
+            _CROSS_ENCODER = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+        except Exception as exc:
+            print(f"[Financial Extractor] Cross-encoder unavailable, falling back to heuristics: {exc}")
+            _CROSS_ENCODER_FAILED = True
+            return None
     return _CROSS_ENCODER
 
 
@@ -56,7 +65,10 @@ def _is_forbidden_context(text: str) -> bool:
 
 def _is_semantic_match(category: str, context: str) -> bool:
     query = f"Is this a significant monetary amount, {category}, or legal value relevant to the case judgment?"
-    return _get_cross_encoder().predict([query, context]) > 0.01
+    model = _get_cross_encoder()
+    if model is None:
+        return True
+    return model.predict([query, context]) > 0.01
 
 
 def _classify_amount(full_text: str, start: int, end: int) -> str:
