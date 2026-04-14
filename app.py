@@ -361,7 +361,7 @@ if st.session_state.step >= 2:
         with run_col:
             st.markdown("##### Analysis controls")
             st.caption("The backend pipeline remains unchanged. This step only runs the existing engine.")
-            if st.button("Run Pipeline Analysis", type="primary", use_container_width=True):
+            if st.button("Analyze Judgement", type="primary", use_container_width=True):
                 progress_bar = st.progress(0.0)
                 with st.status("Analyzing judgment...", expanded=True) as status:
                     start_time = time.time()
