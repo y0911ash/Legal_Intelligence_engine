@@ -128,7 +128,7 @@ def summarize(ranked_chunks: List[Tuple[str, float, str]]) -> str:
 
     verdict_text = " ".join(c for c, _, s in ranked_chunks if s in verdict_sections)
     if verdict_text:
-        brief_parts.append("### 🏛️ FINAL VERDICT")
+        brief_parts.append("FINAL VERDICT")
         brief_parts.append(summarize_raw(verdict_text, "The final court decision and reasoning"))
 
     if not brief_parts:

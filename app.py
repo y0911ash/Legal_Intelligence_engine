@@ -173,7 +173,7 @@ st.markdown(
     """
     <section class="modern-hero">
         <div class="hero-copy">
-            <span class="eyebrow">Legal intelligence workspace</span>
+            <span class="eyebrow">Legal Intelligence Engine</span>
             <h1>Turn dense Indian judgments into clean, outcome-aware briefings.</h1>
             <p>
                 Load a judgment, run the retrieval-guided pipeline, and review the
@@ -486,7 +486,6 @@ if st.session_state.step >= 3 and st.session_state.pipeline_result is not None:
                 mime="text/plain",
                 use_container_width=True,
             )
-            st.info("PDF export is left as a follow-up so the current release stays dependency-light and reliable.")
             if st.button("Start New Case Analysis", type="primary", use_container_width=True):
                 _reset_case()
                 st.rerun()
