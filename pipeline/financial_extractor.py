@@ -41,7 +41,7 @@ def _get_cross_encoder():
         try:
             from sentence_transformers import CrossEncoder
 
-            _CROSS_ENCODER = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+            _CROSS_ENCODER = CrossEncoder("cross-encoder/ms-marco-MiniLM-L6-v2")
         except Exception as exc:
             print(f"[Financial Extractor] Cross-encoder unavailable, falling back to heuristics: {exc}")
             _CROSS_ENCODER_FAILED = True
