@@ -115,6 +115,18 @@ def _build_text_report(raw_text: str, result: dict, runtime_sec: float | None) -
     return "\n".join(lines)
 
 
+def _card_marker(marker_class: str) -> None:
+    st.markdown(f'<div class="card-marker {marker_class}"></div>', unsafe_allow_html=True)
+
+
+def _build_metric_grid(items: list[tuple[str, str]]) -> str:
+    cards = "".join(
+        f'<div class="metric-card"><span>{label}</span><strong>{value}</strong></div>'
+        for label, value in items
+    )
+    return f'<div class="metrics-grid">{cards}</div>'
+
+
 _init_state()
 
 with st.spinner("Initializing AI Models..."):
@@ -187,7 +199,8 @@ choice = "Select a pre-loaded Case..."
 pasted_text = ""
 
 progress_value = {1: 34, 2: 68, 3: 100}.get(st.session_state.step, 34)
-with st.container(border=True):
+with st.container():
+    _card_marker("shell-card-marker")
     st.markdown(
         f"""
         <div class="section-heading">
@@ -214,7 +227,8 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
-with st.container(border=True):
+with st.container():
+    _card_marker("shell-card-marker")
     st.markdown(
         """
         <div class="section-heading">
@@ -289,33 +303,32 @@ if selected_text:
 preview_col, action_col = st.columns([1.6, 1])
 with preview_col:
     if st.session_state.raw_text:
-        with st.container(border=True):
-            st.markdown("##### Document preview")
-            st.caption(st.session_state.selected_source)
-            st.code(st.session_state.raw_text[:1200] + ("..." if len(st.session_state.raw_text) > 1200 else ""))
+        st.markdown("##### Document preview")
+        st.caption(st.session_state.selected_source)
+        st.code(st.session_state.raw_text[:1200] + ("..." if len(st.session_state.raw_text) > 1200 else ""))
     else:
         st.markdown('<div class="empty-state-card">Load a document to preview the judgment here.</div>', unsafe_allow_html=True)
 
 with action_col:
     word_count = len(st.session_state.raw_text.split()) if st.session_state.raw_text else 0
-    with st.container(border=True):
-        st.markdown("##### Case snapshot")
-        st.metric("Word count", f"{word_count:,}")
-        st.metric("Source", "Ready" if st.session_state.raw_text else "Waiting")
-        if st.button(
-            "Load Document Into Workspace",
-            type="primary",
-            use_container_width=True,
-            disabled=not bool(st.session_state.raw_text),
-        ):
-            st.session_state.step = 2
-            st.rerun()
-        if st.button("Reset Workspace", use_container_width=True):
-            _reset_case()
-            st.rerun()
+    st.markdown("##### Case snapshot")
+    st.metric("Word count", f"{word_count:,}")
+    st.metric("Source", "Ready" if st.session_state.raw_text else "Waiting")
+    if st.button(
+        "Load Document Into Workspace",
+        type="primary",
+        use_container_width=True,
+        disabled=not bool(st.session_state.raw_text),
+    ):
+        st.session_state.step = 2
+        st.rerun()
+    if st.button("Reset Workspace", use_container_width=True):
+        _reset_case()
+        st.rerun()
 
 if st.session_state.step >= 2:
-    with st.container(border=True):
+    with st.container():
+        _card_marker("shell-card-marker")
         st.markdown(
             """
             <div class="section-heading">
@@ -331,17 +344,19 @@ if st.session_state.step >= 2:
 
         metrics_col, run_col = st.columns([1.6, 1])
         with metrics_col:
-            st.markdown('<div class="metrics-grid">', unsafe_allow_html=True)
-            for label, value in [
-                ("Selected source", st.session_state.selected_source),
-                ("Input size", f"{len(st.session_state.raw_text.split()):,} words"),
-                ("Result status", "Ready to analyze" if st.session_state.pipeline_result is None else "Analysis available"),
-            ]:
-                st.markdown(
-                    f'<div class="metric-card"><span>{label}</span><strong>{value}</strong></div>',
-                    unsafe_allow_html=True,
-                )
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(
+                _build_metric_grid(
+                    [
+                        ("Selected source", st.session_state.selected_source),
+                        ("Input size", f"{len(st.session_state.raw_text.split()):,} words"),
+                        (
+                            "Result status",
+                            "Ready to analyze" if st.session_state.pipeline_result is None else "Analysis available",
+                        ),
+                    ]
+                ),
+                unsafe_allow_html=True,
+            )
 
         with run_col:
             st.markdown("##### Analysis controls")
@@ -381,7 +396,8 @@ if st.session_state.step >= 3 and st.session_state.pipeline_result is not None:
     export_payload = _build_export_payload(st.session_state.raw_text, result, runtime_sec)
     text_report = _build_text_report(st.session_state.raw_text, result, runtime_sec)
 
-    with st.container(border=True):
+    with st.container():
+        _card_marker("shell-card-marker")
         st.markdown(
             """
             <div class="section-heading">
@@ -478,37 +494,35 @@ if st.session_state.step >= 3 and st.session_state.pipeline_result is not None:
         st.markdown("##### Side-by-side review")
         compare_col1, compare_col2 = st.columns(2)
         with compare_col1:
-            with st.container(border=True):
-                st.markdown("###### Original judgment")
-                st.caption(st.session_state.selected_source)
-                st.text_area(
-                    "Source judgment",
-                    st.session_state.raw_text,
-                    height=360,
-                    disabled=True,
-                    key="source_judgment_view",
-                    label_visibility="collapsed",
-                )
+            st.markdown("###### Original judgment")
+            st.caption(st.session_state.selected_source)
+            st.text_area(
+                "Source judgment",
+                st.session_state.raw_text,
+                height=360,
+                disabled=True,
+                key="source_judgment_view",
+                label_visibility="collapsed",
+            )
 
         with compare_col2:
-            with st.container(border=True):
-                st.markdown("###### Extracted intelligence")
-                st.text_area(
-                    "Generated legal briefing",
-                    result["mapped_summary"],
-                    height=180,
-                    disabled=True,
-                    key="generated_summary_view",
-                    label_visibility="collapsed",
-                )
-                if financial_rows:
-                    st.markdown("**Financial highlights**")
-                    for row in financial_rows[:4]:
-                        st.markdown(f"- {row['Type']}: {row['Amount']}")
-                if result.get("statute_changes"):
-                    st.markdown("**Statute highlights**")
-                    for item in result["statute_changes"][:4]:
-                        st.markdown(f"- {item['ipc_section']} -> {item['bns_section']}")
+            st.markdown("###### Extracted intelligence")
+            st.text_area(
+                "Generated legal briefing",
+                result["mapped_summary"],
+                height=180,
+                disabled=True,
+                key="generated_summary_view",
+                label_visibility="collapsed",
+            )
+            if financial_rows:
+                st.markdown("**Financial highlights**")
+                for row in financial_rows[:4]:
+                    st.markdown(f"- {row['Type']}: {row['Amount']}")
+            if result.get("statute_changes"):
+                st.markdown("**Statute highlights**")
+                for item in result["statute_changes"][:4]:
+                    st.markdown(f"- {item['ipc_section']} -> {item['bns_section']}")
 
         with st.expander("Technical analysis", expanded=False):
             st.markdown(
