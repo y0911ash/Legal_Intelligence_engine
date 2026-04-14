@@ -113,8 +113,8 @@ def summarize(ranked_chunks: List[Tuple[str, float, str]]) -> str:
         return "Summarization failed: no chunks provided."
 
     section_map = {
-        "facts":     ("### 📂 CASE FACTS", "Summary of current case facts"),
-        "arguments": ("### ⚖️ LEGAL ISSUES & ARGUMENTS", "Main legal contentions and issues"),
+        "facts":     ("### CASE FACTS", "Summary of current case facts"),
+        "arguments": ("### LEGAL ISSUES & ARGUMENTS", "Main legal contentions and issues"),
     }
     verdict_sections = {"judgment", "final_order"}
 
