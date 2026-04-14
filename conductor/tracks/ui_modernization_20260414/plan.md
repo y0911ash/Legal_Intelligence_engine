@@ -3,8 +3,8 @@
 ## Phase 1: Layout Modernization & Custom CSS
 Goal: Implement the modular, collapsible layout and establish the core visual theme.
 
-- [ ] Task: Create `style.css` for custom branding and high-contrast legal theme.
-- [ ] Task: Reorganize `app.py` to use `st.expander` and `st.tabs` for pipeline phases.
+- [x] Task: Create `style.css` for custom branding and high-contrast legal theme.
+- [x] Task: Reorganize `app.py` to use `st.expander` and `st.tabs` for pipeline phases.
 - [ ] Task: Conductor - User Manual Verification 'Layout Modernization & Custom CSS' (Protocol in workflow.md)
 
 ## Phase 2: Live Feedback & Progress Tracking
