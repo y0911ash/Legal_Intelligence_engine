@@ -50,3 +50,7 @@ ANTIGRAVITY_BRIEF.md
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Untracked directories
+.devcontainer/
+conductor/

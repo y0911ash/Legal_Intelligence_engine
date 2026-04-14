@@ -10,9 +10,8 @@ import re
 from typing import Dict, List
 
 _AMOUNT_PATTERN = re.compile(
-    r"(?:₹|Rs\.?|INR|Rupees)\s*(\d{1,2}(?:,\d{2})*,\d{3}|\d+)"
-    r"(?:\s*/?\\-?)?"
-    r"(?:\s*(?:lakhs?|crores?|thousands?))?",
+    r"(?:₹|Rs\.?|INR|Rupees)\s*([\d, ]+(?:\s*(?:lakhs?|crores?|thousands?))?)"
+    r"(?:\s*/?\\-?)?",
     re.IGNORECASE,
 )
 
@@ -23,7 +22,10 @@ _CATEGORY_CONTEXT = {
     "costs": re.compile(r"(?i)(costs?|court\s+fee|litigation\s+cost)\b"),
 }
 
-_FORBIDDEN_PREFIXES = {"section", "article", "case", "petition", "no.", "no", "writ", "act", "dated", "year"}
+_FORBIDDEN_PREFIXES = [
+    r"\bsection\b", r"\barticle\b", r"\bcase\b", r"\bpetition\b", 
+    r"\bno\.\b", r"\bno\b", r"\bwrit\b", r"\bact\b", r"\bdated\b", r"\byear\b"
+]
 _CONTEXT_BACK = 120
 _CONTEXT_FWD = 60
 _SENTENCE_END = re.compile(r'[.!?]')
@@ -50,17 +52,21 @@ def _get_cross_encoder():
 
 
 def _trim_at_boundary(text: str, direction: str) -> str:
+    """A version that doesn't break on Rs. or No. but finds actual sentence breaks."""
+    # We look for punctuation followed by space/newline, or end of string.
+    # This prevents 'Rs.' from triggering a boundary.
+    pattern = re.compile(r'[.!?](\s+|$|\n)')
     if direction == 'back':
-        m = list(_SENTENCE_END.finditer(text))
+        m = list(pattern.finditer(text))
         return text[m[-1].end():] if m else text
-    m = _SENTENCE_END.search(text)
+    m = pattern.search(text)
     return text[:m.start()] if m else text
 
 
 def _is_forbidden_context(text: str) -> bool:
-    """Triggers if forbidden word is directly before amount (last 15 chars)."""
-    prefix = text[-15:].lower()
-    return any(f in prefix for f in _FORBIDDEN_PREFIXES)
+    """Triggers if forbidden word is directly before amount (last 20 chars)."""
+    prefix = text[-20:].lower()
+    return any(re.search(f, prefix) for f in _FORBIDDEN_PREFIXES)
 
 
 def _is_semantic_match(category: str, context: str) -> bool:
@@ -68,30 +74,37 @@ def _is_semantic_match(category: str, context: str) -> bool:
     model = _get_cross_encoder()
     if model is None:
         return True
-    return model.predict([query, context]) > 0.01
+    # CrossEncoder.predict usually expects a list of pairs [(q, c)]
+    # We use an extremely permissive threshold because missing a financial
+    # implication is worse than a false positive in a legal summary.
+    scores = model.predict([(query, context)])
+    return float(scores[0]) > -5.0
 
 
-def _classify_amount(full_text: str, start: int, end: int) -> str:
+def _classify_amount(full_text: str, start: int, end: int) -> tuple:
     raw_back = full_text[max(0, start - _CONTEXT_BACK):start]
     is_suspect = _is_forbidden_context(raw_back)
 
-    back_ctx = _trim_at_boundary(raw_back, 'back')
-    fwd_ctx = _trim_at_boundary(full_text[end:end + _CONTEXT_FWD], 'forward')
+    raw_fwd = full_text[end:end + _CONTEXT_FWD]
 
     best_cat, best_dist, found_kw = "fine", float("inf"), False
 
     for cat, pattern in _CATEGORY_CONTEXT.items():
-        for m in pattern.finditer(back_ctx):
+        for m in pattern.finditer(raw_back):
             found_kw = True
-            dist = len(back_ctx) - m.end()
+            dist = len(raw_back) - m.end()
             if dist < best_dist:
                 best_dist, best_cat = dist, cat
-        for m in pattern.finditer(fwd_ctx):
+        for m in pattern.finditer(raw_fwd):
             found_kw = True
             if m.start() < best_dist:
                 best_dist, best_cat = m.start(), cat
 
-    return "non_legal_mention" if (not found_kw and is_suspect) else best_cat
+    # If no keyword found AND bouncer suspect, it's definitely non-legal
+    if not found_kw and is_suspect:
+        return "non_legal_mention", False
+    
+    return best_cat, found_kw
 
 
 def extract_financials(text: str) -> Dict:
@@ -99,19 +112,22 @@ def extract_financials(text: str) -> Dict:
     seen = set()
 
     for match in _AMOUNT_PATTERN.finditer(text):
-        amount_str = f"₹{match.group(1)}"
+        amount_str = f"₹{match.group(1)}".strip()
         if amount_str in seen:
             continue
         seen.add(amount_str)
 
-        category = _classify_amount(text, match.start(), match.end())
+        category, has_keyword = _classify_amount(text, match.start(), match.end())
 
+        # Give AI a wide 200-char view for the final verdict
         ctx_start = max(0, match.start() - 100)
         ctx_end = min(len(text), match.end() + 100)
         snippet = text[ctx_start:ctx_end].strip()
 
+        # If we have a strong keyword match or legal context, we trust it.
+        # We only use semantic match as an extra 'rescue' for suspicious amounts.
         check_cat = category if category != "non_legal_mention" else "fine"
-        verified = _is_semantic_match(check_cat, snippet)
+        verified = has_keyword or _is_semantic_match(check_cat, snippet)
 
         detail = {"amount": amount_str, "context": f"...{snippet}..."}
 

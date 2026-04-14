@@ -104,17 +104,31 @@ def summarize_raw(text: str, instruction: str = "summarize") -> str:
     return tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
 
 
+def _clean_summary(text: str, heading: str) -> str:
+    """Removes redundant headings or 'Summary:' prefixes from model output."""
+    clean = text.strip()
+    # Remove common model echoes
+    noise = [
+        "summary:", "facts of the case:", "legal issues:", 
+        "final verdict:", "judgment:", "case facts:"
+    ]
+    for n in noise:
+        if clean.lower().startswith(n):
+            clean = clean[len(n):].strip().lstrip(":").strip()
+    
+    # Capitalize first letter if it's now lowercase
+    if clean:
+        clean = clean[0].upper() + clean[1:]
+    return clean
+
+
 def summarize(ranked_chunks: List[Tuple[str, float, str]]) -> str:
-    """
-    Focused Multi-Pass Summarizer.
-    Summarizes Facts, Arguments, and Verdict separately to avoid model looping.
-    """
     if not ranked_chunks:
         return "Summarization failed: no chunks provided."
 
     section_map = {
-        "facts":     ("### CASE FACTS", "Summary of current case facts"),
-        "arguments": ("### LEGAL ISSUES & ARGUMENTS", "Main legal contentions and issues"),
+        "facts":     ("### Case Facts", "Summary of current case facts"),
+        "arguments": ("### Legal Issues & Arguments", "Main legal contentions and issues"),
     }
     verdict_sections = {"judgment", "final_order"}
 
@@ -123,13 +137,15 @@ def summarize(ranked_chunks: List[Tuple[str, float, str]]) -> str:
     for sec_key, (heading, instruction) in section_map.items():
         text = " ".join(c for c, _, s in ranked_chunks if s == sec_key)
         if text:
+            raw_sum = summarize_raw(text, instruction)
             brief_parts.append(heading)
-            brief_parts.append(summarize_raw(text, instruction))
+            brief_parts.append(_clean_summary(raw_sum, heading))
 
     verdict_text = " ".join(c for c, _, s in ranked_chunks if s in verdict_sections)
     if verdict_text:
-        brief_parts.append("FINAL VERDICT")
-        brief_parts.append(summarize_raw(verdict_text, "The final court decision and reasoning"))
+        raw_verdict = summarize_raw(verdict_text, "The final court decision and reasoning")
+        brief_parts.append("### Final Verdict")
+        brief_parts.append(_clean_summary(raw_verdict, "Final Verdict"))
 
     if not brief_parts:
         return summarize_raw(" ".join(c for c, _, _ in ranked_chunks), "General Case Summary")
