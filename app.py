@@ -425,7 +425,8 @@ if st.session_state.step >= 3 and st.session_state.pipeline_result is not None:
             <div class="summary-card">
                 <span class="section-kicker">Executive summary</span>
                 <h3>Outcome-aware case briefing</h3>
-                <p>{result["mapped_summary"]}</p>
+
+{result["mapped_summary"]}
             </div>
             """,
             unsafe_allow_html=True,
