@@ -8,11 +8,35 @@ Usage:
   result = run_pipeline(text)
 """
 
+import re
 from pipeline.segmenter import segment_legal_doc
 from pipeline.ranker import rank_chunks
 from pipeline.summarizer import summarize
 from pipeline.bns_mapper import map_statutes
 from pipeline.financial_extractor import extract_financials
+
+
+def _clean_pdf_text(text: str) -> str:
+    """
+    Pre-clean PDF-extracted text before analysis.
+    Removes common artefacts introduced by legal database PDF extractors
+    (Manupatra, SCC Online, IndiaKanoon) that cause financial false positives.
+    """
+    # Remove page-stamp lines: "06-03-2026 (Page 12 of 108)"
+    text = re.sub(r"\d{2}-\d{2}-\d{4}\s*\(Page\s+\d+\s+of\s+\d+\)", " ", text)
+    # Remove Manupatra / SCC watermark lines
+    text = re.sub(
+        r"(?i)(www\.manupatra\.com|manupatra information solutions"
+        r"|scc online|indiakanoon\.org|manu/sc/|manu/hc/)",
+        " ", text
+    )
+    # Remove isolated institution names on their own line
+    text = re.sub(r"(?m)^\s*[A-Z][A-Za-z ]+University\s*$", " ", text)
+    # Collapse 3+ consecutive newlines into two
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    # Remove lines that are purely digits (page numbers, paragraph counters)
+    text = re.sub(r"(?m)^\s*\d{1,4}\s*$", "", text)
+    return text.strip()
 
 
 def run_pipeline(raw_text: str) -> dict:
@@ -22,7 +46,11 @@ def run_pipeline(raw_text: str) -> dict:
     Returns dict with keys: summary, mapped_summary, statute_changes,
     financials, segmentation_mode, top_chunks.
     """
-    print("\n[Pipeline] Step 1/5 -- Segmenting document...")
+    print("\n[Pipeline] Step 0/5 -- Cleaning PDF text artefacts...")
+    raw_text = _clean_pdf_text(raw_text)
+
+    print("[Pipeline] Step 1/5 -- Segmenting document...")
+
     doc = segment_legal_doc(raw_text)
     print(f"  {doc.summary()}")
 

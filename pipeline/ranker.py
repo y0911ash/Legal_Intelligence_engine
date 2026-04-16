@@ -97,11 +97,22 @@ def rank_chunks(doc: SegmentedDocument, query: str = RETRIEVAL_QUERY) -> List[Tu
             s = score_chunk(float(sims[i]), keyword_density(chunk), section_name)
             sectional_scored[cat].append((s, chunk, section_name))
 
-    # Balanced collection: 2 facts, 2 args, 4 judgment
+    # Scale chunk budget with document size so large PDFs get better coverage.
+    # Short (<10K words): facts=2, args=2, judgment=4
+    # Medium (10K-20K):   facts=2, args=3, judgment=6
+    # Large (>20K words): facts=3, args=4, judgment=8
+    total_words = sum(len(v.split()) for v in doc.sections.values())
+    if total_words > 20_000:
+        limits = {"facts": 3, "arguments": 4, "judgment": 8}
+    elif total_words > 10_000:
+        limits = {"facts": 2, "arguments": 3, "judgment": 6}
+    else:
+        limits = {"facts": 2, "arguments": 2, "judgment": 4}
+
     final = []
     for cat, items in sectional_scored.items():
         items.sort(key=lambda x: x[0], reverse=True)
-        limit = 4 if cat == "judgment" else 2
+        limit = limits.get(cat, 2)
         for score, chunk, orig_sec in items[:limit]:
             final.append((chunk, score, orig_sec))
 
