@@ -47,6 +47,14 @@ ANTIGRAVITY_BRIEF.md
 
 # Scratch / local analysis scripts — for local testing only
 scratch/analyze_pdf.py
+scratch/verify_fix.py
+scratch/verify_summary.py
+scratch/test_new_pdf.py
+scratch/test_bhopal.py
+scratch/generate_report.py
+
+# Generated reports
+Legal_Intelligence_Engine_Report.docx
 
 # OS generated files
 .DS_Store
